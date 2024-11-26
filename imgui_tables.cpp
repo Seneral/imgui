@@ -1338,7 +1338,7 @@ void ImGui::TableUpdateBorders(ImGuiTable* table)
         if ((hovered && g.HoveredIdTimer > TABLE_RESIZE_SEPARATOR_FEEDBACK_TIMER) || held)
         {
             table->HoveredColumnBorder = (ImGuiTableColumnIdx)column_n;
-            SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+            SetMouseCursor(ImGuiMouseCursor_ResizeCol);
         }
     }
 }
@@ -4504,7 +4504,7 @@ void ImGui::EndColumns()
             {
                 ButtonBehavior(column_hit_rect, column_id, &hovered, &held);
                 if (hovered || held)
-                    SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+                    SetMouseCursor(ImGuiMouseCursor_ResizeCol);
                 if (held && !(column->Flags & ImGuiOldColumnFlags_NoResize))
                     dragging_column = n;
             }

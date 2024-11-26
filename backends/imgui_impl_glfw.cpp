@@ -697,6 +697,18 @@ static bool ImGui_ImplGlfw_Init(GLFWwindow* window, bool install_callbacks, Glfw
     bd->MouseCursors[ImGuiMouseCursor_ResizeAll] = glfwCreateStandardCursor(GLFW_RESIZE_ALL_CURSOR);
     bd->MouseCursors[ImGuiMouseCursor_ResizeNESW] = glfwCreateStandardCursor(GLFW_RESIZE_NESW_CURSOR);
     bd->MouseCursors[ImGuiMouseCursor_ResizeNWSE] = glfwCreateStandardCursor(GLFW_RESIZE_NWSE_CURSOR);
+
+    bd->MouseCursors[ImGuiMouseCursor_ResizeN] = glfwCreateStandardCursor(GLFW_RESIZE_N_CURSOR);
+    bd->MouseCursors[ImGuiMouseCursor_ResizeE] = glfwCreateStandardCursor(GLFW_RESIZE_E_CURSOR);
+    bd->MouseCursors[ImGuiMouseCursor_ResizeS] = glfwCreateStandardCursor(GLFW_RESIZE_S_CURSOR);
+    bd->MouseCursors[ImGuiMouseCursor_ResizeW] = glfwCreateStandardCursor(GLFW_RESIZE_W_CURSOR);
+    bd->MouseCursors[ImGuiMouseCursor_ResizeNW] = glfwCreateStandardCursor(GLFW_RESIZE_NW_CURSOR);
+    bd->MouseCursors[ImGuiMouseCursor_ResizeSE] = glfwCreateStandardCursor(GLFW_RESIZE_SE_CURSOR);
+    bd->MouseCursors[ImGuiMouseCursor_ResizeNE] = glfwCreateStandardCursor(GLFW_RESIZE_NE_CURSOR);
+    bd->MouseCursors[ImGuiMouseCursor_ResizeSW] = glfwCreateStandardCursor(GLFW_RESIZE_SW_CURSOR);
+    bd->MouseCursors[ImGuiMouseCursor_ResizeCol] = glfwCreateStandardCursor(GLFW_RESIZE_COL_CURSOR);
+    bd->MouseCursors[ImGuiMouseCursor_ResizeRow] = glfwCreateStandardCursor(GLFW_RESIZE_ROW_CURSOR);
+
     bd->MouseCursors[ImGuiMouseCursor_NotAllowed] = glfwCreateStandardCursor(GLFW_NOT_ALLOWED_CURSOR);
 #else
     bd->MouseCursors[ImGuiMouseCursor_ResizeAll] = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
