@@ -1884,9 +1884,19 @@ enum ImGuiMouseCursor_
     ImGuiMouseCursor_TextInput,         // When hovering over InputText, etc.
     ImGuiMouseCursor_ResizeAll,         // (Unused by Dear ImGui functions)
     ImGuiMouseCursor_ResizeNS,          // When hovering over a horizontal border
-    ImGuiMouseCursor_ResizeEW,          // When hovering over a vertical border or a column
-    ImGuiMouseCursor_ResizeNESW,        // When hovering over the bottom-left corner of a window
-    ImGuiMouseCursor_ResizeNWSE,        // When hovering over the bottom-right corner of a window
+    ImGuiMouseCursor_ResizeEW,          // When hovering over a vertical border
+    ImGuiMouseCursor_ResizeNESW,        // When hovering over the bottom-left or top-right corner of a window
+    ImGuiMouseCursor_ResizeNWSE,        // When hovering over the bottom-right or top-left corner of a window
+    ImGuiMouseCursor_ResizeN,           // When hovering over the top border
+    ImGuiMouseCursor_ResizeE,           // When hovering over the right border
+    ImGuiMouseCursor_ResizeS,           // When hovering over the bottom border
+    ImGuiMouseCursor_ResizeW,           // When hovering over the west border
+    ImGuiMouseCursor_ResizeNW,          // When hovering over the top-left corner of a window
+    ImGuiMouseCursor_ResizeSE,          // When hovering over the bottom-right corner of a window
+    ImGuiMouseCursor_ResizeNE,          // When hovering over the top-right corner of a window
+    ImGuiMouseCursor_ResizeSW,          // When hovering over the bottom-left corner of a window
+    ImGuiMouseCursor_ResizeCol,         // When hovering over a column
+    ImGuiMouseCursor_ResizeRow,         // When hovering over a row
     ImGuiMouseCursor_Hand,              // (Unused by Dear ImGui functions. Use for e.g. hyperlinks)
     ImGuiMouseCursor_NotAllowed,        // When hovering something with disallowed interaction. Usually a crossed circle.
     ImGuiMouseCursor_COUNT
