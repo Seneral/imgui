@@ -116,6 +116,7 @@
 #endif
 
 #include "imgui.h"
+#include "imgui_internal.h"
 #ifndef IMGUI_DISABLE
 #include "imgui_impl_opengl3.h"
 #include <stdio.h>
@@ -496,7 +497,7 @@ static void ImGui_ImplOpenGL3_SetupRenderState(ImDrawData* draw_data, int fb_wid
 // OpenGL3 Render function.
 // Note that this implementation is little overcomplicated because we are saving/setting up/restoring every OpenGL state explicitly.
 // This is in order to be able to run within an OpenGL engine that doesn't do so.
-void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
+void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data, ImVec2 clipMin, ImVec2 clipMax)
 {
     // Avoid rendering when minimized, scale coordinates for retina displays (screen coordinates != framebuffer coordinates)
     int fb_width = (int)(draw_data->DisplaySize.x * draw_data->FramebufferScale.x);
@@ -561,7 +562,7 @@ void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
     // Render command lists
     for (int n = 0; n < draw_data->CmdListsCount; n++)
     {
-        const ImDrawList* draw_list = draw_data->CmdLists[n];
+        ImDrawList* draw_list = draw_data->CmdLists[n];
 
         // Upload vertex/index buffers
         // - OpenGL drivers are in a very sorry state nowadays....
@@ -596,15 +597,27 @@ void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
 
         for (int cmd_i = 0; cmd_i < draw_list->CmdBuffer.Size; cmd_i++)
         {
-            const ImDrawCmd* pcmd = &draw_list->CmdBuffer[cmd_i];
+            ImDrawCmd* pcmd = &draw_list->CmdBuffer[cmd_i];
             if (pcmd->UserCallback != nullptr)
             {
                 // User callback, registered via ImDrawList::AddCallback()
+                ImRect clipRect(pcmd->ClipRect);
+                ImRect clipOverride(clipMin, clipMax);
+                if (!clipOverride.Overlaps(clipRect))
+                    continue;
+                clipOverride.ClipWith(clipRect);
+
+                // Overwrite with overlapping clip rect
+                pcmd->ClipRect = clipOverride.ToVec4();
+
                 // (ImDrawCallback_ResetRenderState is a special callback value used by the user to request the renderer to reset render state.)
                 if (pcmd->UserCallback == ImDrawCallback_ResetRenderState)
                     ImGui_ImplOpenGL3_SetupRenderState(draw_data, fb_width, fb_height, vertex_array_object);
                 else
                     pcmd->UserCallback(draw_list, pcmd);
+
+                // Restore to original clip rect
+                pcmd->ClipRect = clipRect.ToVec4();
             }
             else
             {
@@ -613,9 +626,17 @@ void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
                 ImVec2 clip_max((pcmd->ClipRect.z - clip_off.x) * clip_scale.x, (pcmd->ClipRect.w - clip_off.y) * clip_scale.y);
                 if (clip_max.x <= clip_min.x || clip_max.y <= clip_min.y)
                     continue;
+                ImVec2 clip_override_min((clipMin.x - clip_off.x) * clip_scale.x, (clipMin.y - clip_off.y) * clip_scale.y);
+                ImVec2 clip_override_max((clipMax.x - clip_off.x) * clip_scale.x, (clipMax.y - clip_off.y) * clip_scale.y);
+
+                ImRect clip(clip_min, clip_max);
+                ImRect clipOverride(clip_override_min, clip_override_max);
+                if (!clip.Overlaps(clipOverride))
+                    continue;
+                clip.ClipWith(clipOverride);
 
                 // Apply scissor/clipping rectangle (Y is inverted in OpenGL)
-                GL_CALL(glScissor((int)clip_min.x, (int)((float)fb_height - clip_max.y), (int)(clip_max.x - clip_min.x), (int)(clip_max.y - clip_min.y)));
+                GL_CALL(glScissor((int)clip.Min.x, (int)((float)fb_height - clip.Max.y), (int)(clip.Max.x - clip.Min.x), (int)(clip.Max.y - clip.Min.y)));
 
                 // Bind texture, Draw
                 GL_CALL(glBindTexture(GL_TEXTURE_2D, (GLuint)(intptr_t)pcmd->GetTexID()));
@@ -672,6 +693,81 @@ void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
     glViewport(last_viewport[0], last_viewport[1], (GLsizei)last_viewport[2], (GLsizei)last_viewport[3]);
     glScissor(last_scissor_box[0], last_scissor_box[1], (GLsizei)last_scissor_box[2], (GLsizei)last_scissor_box[3]);
     (void)bd; // Not all compilation paths use this
+}
+
+
+// OpenGL3 Render function.
+void    ImGui_ImplOpenGL3_RenderDrawData(ImDrawData* draw_data)
+{
+    ImGui_ImplOpenGL3_RenderDrawData(draw_data, draw_data->DisplayPos,
+        ImVec2(draw_data->DisplayPos.x+draw_data->DisplaySize.x, draw_data->DisplayPos.y+draw_data->DisplaySize.y));
+}
+
+void ImGui_ImplOpenGL3_RenderDrawList(ImGuiViewport *viewport, ImDrawList *draw_list)
+{ // Assumes to be nested within RenderDrawData
+
+    // Setup own buffers since main buffers are already used (current main draw list data is uploaded to it)
+	static unsigned int VboHandle = 0, ElementsHandle = 0;
+	if (VboHandle == 0 && ElementsHandle == 0)
+	{
+		glGenBuffers(1, &VboHandle);
+		glGenBuffers(1, &ElementsHandle);
+	}
+
+	if ((viewport->Flags & ImGuiViewportFlags_IsMinimized) != 0)
+		return;
+
+    ImGui_ImplOpenGL3_Data* bd = ImGui_ImplOpenGL3_GetBackendData();
+
+    GLuint last_array_buffer; glGetIntegerv(GL_ARRAY_BUFFER_BINDING, (GLint*)&last_array_buffer);
+    GLuint last_element_array_buffer; glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, (GLint*)&last_element_array_buffer);
+
+	const GLsizeiptr vtx_buffer_size = (GLsizeiptr)draw_list->VtxBuffer.Size * (int)sizeof(ImDrawVert);
+	const GLsizeiptr idx_buffer_size = (GLsizeiptr)draw_list->IdxBuffer.Size * (int)sizeof(ImDrawIdx);
+
+    GL_CALL(glBindBuffer(GL_ARRAY_BUFFER, VboHandle));
+    GL_CALL(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ElementsHandle));
+	GL_CALL(glBufferData(GL_ARRAY_BUFFER, vtx_buffer_size, (const GLvoid*)draw_list->VtxBuffer.Data, GL_STREAM_DRAW));
+	GL_CALL(glBufferData(GL_ELEMENT_ARRAY_BUFFER, idx_buffer_size, (const GLvoid*)draw_list->IdxBuffer.Data, GL_STREAM_DRAW));
+    GL_CALL(glEnableVertexAttribArray(bd->AttribLocationVtxPos));
+    GL_CALL(glEnableVertexAttribArray(bd->AttribLocationVtxUV));
+    GL_CALL(glEnableVertexAttribArray(bd->AttribLocationVtxColor));
+    GL_CALL(glVertexAttribPointer(bd->AttribLocationVtxPos,   2, GL_FLOAT,         GL_FALSE, sizeof(ImDrawVert), (GLvoid*)offsetof(ImDrawVert, pos)));
+    GL_CALL(glVertexAttribPointer(bd->AttribLocationVtxUV,    2, GL_FLOAT,         GL_FALSE, sizeof(ImDrawVert), (GLvoid*)offsetof(ImDrawVert, uv)));
+    GL_CALL(glVertexAttribPointer(bd->AttribLocationVtxColor, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(ImDrawVert), (GLvoid*)offsetof(ImDrawVert, col)));
+
+    ImVec2 clip_off = viewport->Pos;         // (0,0) unless using multi-viewports
+    ImVec2 clip_scale = ImGui::GetIO().DisplayFramebufferScale; // (1,1) unless using retina display which are often (2,2)
+    int fb_height = (int)(viewport->Size.y * ImGui::GetIO().DisplayFramebufferScale.y);
+
+	for (int cmd_i = 0; cmd_i < draw_list->CmdBuffer.Size; cmd_i++)
+	{
+		ImDrawCmd* pcmd = &draw_list->CmdBuffer[cmd_i];
+		ImVec2 clip_min((pcmd->ClipRect.x - clip_off.x) * clip_scale.x, (pcmd->ClipRect.y - clip_off.y) * clip_scale.y);
+		ImVec2 clip_max((pcmd->ClipRect.z - clip_off.x) * clip_scale.x, (pcmd->ClipRect.w - clip_off.y) * clip_scale.y);
+
+		GL_CALL(glScissor((int)clip_min.x, (int)((float)fb_height - clip_max.y), (int)(clip_max.x - clip_min.x), (int)(clip_max.y - clip_min.y)));
+
+		// Bind texture, Draw
+		GL_CALL(glBindTexture(GL_TEXTURE_2D, (GLuint)(intptr_t)pcmd->GetTexID()));
+#ifdef IMGUI_IMPL_OPENGL_MAY_HAVE_VTX_OFFSET
+		if (bd->GlVersion >= 320)
+			GL_CALL(glDrawElementsBaseVertex(GL_TRIANGLES, (GLsizei)pcmd->ElemCount, sizeof(ImDrawIdx) == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT, (void*)(intptr_t)(pcmd->IdxOffset * sizeof(ImDrawIdx)), (GLint)pcmd->VtxOffset));
+		else
+#endif
+		GL_CALL(glDrawElements(GL_TRIANGLES, (GLsizei)pcmd->ElemCount, sizeof(ImDrawIdx) == 2 ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT, (void*)(intptr_t)(pcmd->IdxOffset * sizeof(ImDrawIdx))));
+	}
+
+	GL_CALL(glBindBuffer(GL_ARRAY_BUFFER, last_array_buffer));
+    GL_CALL(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, last_element_array_buffer));
+    // Data still intact
+    GL_CALL(glEnableVertexAttribArray(bd->AttribLocationVtxPos));
+    GL_CALL(glEnableVertexAttribArray(bd->AttribLocationVtxUV));
+    GL_CALL(glEnableVertexAttribArray(bd->AttribLocationVtxColor));
+    GL_CALL(glVertexAttribPointer(bd->AttribLocationVtxPos,   2, GL_FLOAT,         GL_FALSE, sizeof(ImDrawVert), (GLvoid*)offsetof(ImDrawVert, pos)));
+    GL_CALL(glVertexAttribPointer(bd->AttribLocationVtxUV,    2, GL_FLOAT,         GL_FALSE, sizeof(ImDrawVert), (GLvoid*)offsetof(ImDrawVert, uv)));
+    GL_CALL(glVertexAttribPointer(bd->AttribLocationVtxColor, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(ImDrawVert), (GLvoid*)offsetof(ImDrawVert, col)));
+
 }
 
 bool ImGui_ImplOpenGL3_CreateFontsTexture()
