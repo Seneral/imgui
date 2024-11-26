@@ -585,6 +585,8 @@ bool ImGui::ButtonBehavior(const ImRect& bb, ImGuiID id, bool* out_hovered, bool
                 g.DragDropHoldJustPressedId = id;
                 FocusWindow(window);
             }
+            if (g.HoveredId == id && item_flags & ImGuiItemFlags_AllowOverlap)
+                g.HoveredIdAllowOverlap = true;
         }
 
     if (flatten_hovered_children)
@@ -667,6 +669,9 @@ bool ImGui::ButtonBehavior(const ImRect& bb, ImGuiID id, bool* out_hovered, bool
             if (g.ActiveId == id && (item_flags & ImGuiItemFlags_ButtonRepeat))
                 if (g.IO.MouseDownDuration[g.ActiveIdMouseButton] > 0.0f && IsMouseClicked(g.ActiveIdMouseButton, ImGuiInputFlags_Repeat, test_owner_id))
                     pressed = true;
+
+            if (g.ActiveId == id && item_flags & ImGuiItemFlags_AllowOverlap)
+                g.ActiveIdAllowOverlap = true;
         }
 
         if (pressed && g.IO.ConfigNavCursorVisibleAuto)
@@ -7132,7 +7137,8 @@ bool ImGui::Selectable(const char* label, bool selected, ImGuiSelectableFlags fl
     ImVec2 label_size = CalcTextSize(label, NULL, true);
     ImVec2 size(size_arg.x != 0.0f ? size_arg.x : label_size.x, size_arg.y != 0.0f ? size_arg.y : label_size.y);
     ImVec2 pos = window->DC.CursorPos;
-    pos.y += window->DC.CurrLineTextBaseOffset;
+    float paddingY = window->DC.CurrLineTextBaseOffset; // PaddingY mainly relevant for tables
+    pos.y += paddingY;
     ItemSize(size, 0.0f);
 
     // Fill horizontal space
@@ -7149,7 +7155,7 @@ bool ImGui::Selectable(const char* label, bool selected, ImGuiSelectableFlags fl
     if ((flags & ImGuiSelectableFlags_NoPadWithHalfSpacing) == 0)
     {
         const float spacing_x = span_all_columns ? 0.0f : style.ItemSpacing.x;
-        const float spacing_y = style.ItemSpacing.y;
+        const float spacing_y = style.ItemSpacing.y + paddingY*2;
         const float spacing_L = IM_TRUNC(spacing_x * 0.50f);
         const float spacing_U = IM_TRUNC(spacing_y * 0.50f);
         bb.Min.x -= spacing_L;
@@ -7261,7 +7267,7 @@ bool ImGui::Selectable(const char* label, bool selected, ImGuiSelectableFlags fl
         if (highlighted || selected)
         {
             // Between 1.91.0 and 1.91.4 we made selected Selectable use an arbitrary lerp between _Header and _HeaderHovered. Removed that now. (#8106)
-            ImU32 col = GetColorU32((held && highlighted) ? ImGuiCol_HeaderActive : highlighted ? ImGuiCol_HeaderHovered : ImGuiCol_Header);
+            ImU32 col = GetColorU32((held && highlighted) ? ImGuiCol_HeaderActive : selected ? ImGuiCol_Header : ImGuiCol_HeaderHovered);
             RenderFrame(bb.Min, bb.Max, col, false, 0.0f);
         }
         if (g.NavId == id)
